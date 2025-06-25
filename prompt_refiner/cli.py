@@ -1,12 +1,11 @@
 """Command-line interface for prompt-refiner."""
 
-from typing import Optional, Annotated
+from typing import Annotated, Optional
 
 import typer
 
 from prompt_refiner.refinement import PromptRefiner
 from prompt_refiner.ui import UI
-
 
 # Initialize Typer app
 app = typer.Typer(
@@ -20,7 +19,7 @@ def main(
     prompt: Annotated[Optional[str], typer.Argument(help="The prompt to refine")] = None,
     config: Annotated[Optional[str], typer.Option("--config", help="Path to configuration file")] = None,
     template: Annotated[str, typer.Option(
-        "--template", 
+        "--template",
         help="Template to use for refinement"
     )] = "default",
     verbose: Annotated[bool, typer.Option(
@@ -41,21 +40,21 @@ def main(
     )] = False
 ):
     """Refine prompts using Claude or Ollama for better clarity and effectiveness."""
-    
+
     # Initialize UI
     ui = UI()
-    
+
     # Validate template
     valid_templates = ['default', 'coding', 'analysis', 'writing']
     if template not in valid_templates:
         ui.print(f"[red]Error: Invalid template '{template}'. Choose from: {', '.join(valid_templates)}[/red]")
         raise typer.Exit(1)
-    
+
     # Validate provider
     if provider and provider not in ['auto', 'claude', 'ollama']:
         ui.print("[red]Error: Invalid provider. Choose from: auto, claude, ollama[/red]")
         raise typer.Exit(1)
-    
+
     # Initialize refiner
     try:
         refiner = PromptRefiner(
@@ -65,8 +64,8 @@ def main(
         )
     except Exception as e:
         ui.show_initialization_error(str(e))
-        raise typer.Exit(1)
-    
+        raise typer.Exit(1) from e
+
     # Handle cache clearing if requested
     if clear_cache:
         count = refiner.clear_cache()
@@ -74,7 +73,7 @@ def main(
         if not prompt:
             # If no prompt provided and only clearing cache, exit
             raise typer.Exit(0)
-    
+
     # Get prompt
     if prompt:
         original_prompt = prompt
@@ -83,26 +82,26 @@ def main(
         try:
             original_prompt = ui.prompt_for_input()
         except KeyboardInterrupt:
-            raise typer.Exit(0)
-    
+            raise typer.Exit(0) from None
+
     if not original_prompt:
         ui.print("[red]Error: No prompt provided[/red]")
         raise typer.Exit(1)
-    
+
     # Show provider info if verbose
     if verbose:
         ui.show_config(refiner.provider, template, not no_cache)
-    
+
     ui.print()
-    
+
     # Refine the prompt with progress indicator
     with ui.show_progress("Analyzing prompt..."):
         result = refiner.refine_prompt(original_prompt, template)
-    
+
     if "error" in result:
         ui.show_refinement_error(result['error'], result.get('provider'))
         raise typer.Exit(1)
-    
+
     # Display results
     ui.show_results(
         original=original_prompt,

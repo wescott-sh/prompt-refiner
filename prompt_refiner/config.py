@@ -1,11 +1,12 @@
 """Configuration management for prompt-refiner"""
 
 import os
-import yaml
-from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import MappingProxyType
+from typing import Any, Dict, Optional, Tuple
+
+import yaml
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ class Config:
     provider: ProviderConfig = field(default_factory=ProviderConfig)
     refinement: RefinementConfig = field(default_factory=RefinementConfig)
     advanced: AdvancedConfig = field(default_factory=AdvancedConfig)
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Config':
         """Create Config from dictionary"""
@@ -59,7 +60,7 @@ class Config:
         refinement_data = data.get('refinement', {})
         advanced_data = data.get('advanced', {})
         cache_data = advanced_data.get('cache', {})
-        
+
         return cls(
             provider=ProviderConfig(
                 type=provider_data.get('type', 'auto'),
@@ -109,16 +110,16 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             package_dir / "config.yaml",
             Path.home() / ".config" / "prompt-refiner" / "config.yaml",
         ]
-        
+
         config_file = None
         for loc in config_locations:
             if loc.exists():
                 config_file = loc
                 break
-        
+
         if not config_file:
             # Return empty dict to use defaults
             return {}
-    
-    with open(config_file, 'r') as f:
+
+    with open(config_file) as f:
         return yaml.safe_load(f)

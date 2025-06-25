@@ -10,7 +10,7 @@ ENV/
 env/
 
 # uv
-.python-version
+# Note: uv.lock and .python-version should be committed
 
 # IDE
 .vscode/

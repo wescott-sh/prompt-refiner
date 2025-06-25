@@ -1,26 +1,26 @@
 """UI module for prompt-refiner using Rich for terminal output."""
 
-from typing import Optional, ContextManager
 from contextlib import contextmanager
+from typing import ContextManager, Optional
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
 from rich.text import Text
-from rich import box
 
 
 class UI:
     """Handles all terminal UI output using Rich."""
-    
+
     def __init__(self):
         """Initialize UI with a Rich console."""
         self.console = Console()
-    
+
     def show_error(self, error: str, provider: Optional[str] = None) -> None:
         """Display an error message in a styled panel.
-        
+
         Args:
             error: The error message to display
             provider: Optional provider name to include in the error
@@ -28,7 +28,7 @@ class UI:
         error_msg = f"[bold red]Error:[/bold red] {error}"
         if provider:
             error_msg += f"\n[bold]Provider:[/bold] {provider}"
-        
+
         error_panel = Panel(
             error_msg,
             title="[red]Error[/red]",
@@ -36,10 +36,10 @@ class UI:
             box=box.ROUNDED
         )
         self.console.print(error_panel)
-    
+
     def show_config(self, provider: str, template: str, cache_enabled: bool) -> None:
         """Display configuration information.
-        
+
         Args:
             provider: The LLM provider being used
             template: The template being used
@@ -53,14 +53,14 @@ class UI:
             box=box.ROUNDED
         )
         self.console.print(provider_info)
-    
+
     @contextmanager
     def show_progress(self, message: str) -> ContextManager[Progress]:
         """Display a progress spinner with a message.
-        
+
         Args:
             message: The message to display while processing
-            
+
         Yields:
             Progress: A Rich Progress instance
         """
@@ -73,19 +73,19 @@ class UI:
             task = progress.add_task(message, total=None)
             yield progress
             progress.update(task, completed=True)
-    
+
     def show_results(
-        self, 
-        original: str, 
-        improved: str, 
-        changes: str, 
-        score: Optional[str], 
+        self,
+        original: str,
+        improved: str,
+        changes: str,
+        score: Optional[str],
         from_cache: bool,
         show_explanation: bool,
         show_score: bool
     ) -> None:
         """Display the refinement results.
-        
+
         Args:
             original: The original prompt
             improved: The improved prompt
@@ -96,7 +96,7 @@ class UI:
             show_score: Whether to show the score
         """
         self.console.print()
-        
+
         # Original prompt
         original_panel = Panel(
             Text(original, style="dim"),
@@ -105,7 +105,7 @@ class UI:
             box=box.ROUNDED
         )
         self.console.print(original_panel)
-        
+
         # Improved prompt
         improved_panel = Panel(
             Text(improved, style="green"),
@@ -114,7 +114,7 @@ class UI:
             box=box.ROUNDED
         )
         self.console.print(improved_panel)
-        
+
         # Changes explanation
         if show_explanation:
             changes_panel = Panel(
@@ -124,7 +124,7 @@ class UI:
                 box=box.ROUNDED
             )
             self.console.print(changes_panel)
-        
+
         # Effectiveness score
         if show_score and score:
             score_panel = Panel(
@@ -134,20 +134,20 @@ class UI:
                 box=box.ROUNDED
             )
             self.console.print(score_panel)
-        
+
         # Cache indicator
         if from_cache:
             self.console.print("\n[dim cyan]💾 Retrieved from cache[/dim cyan]")
-    
+
     def prompt_for_input(self) -> str:
         """Prompt the user for input in interactive mode.
-        
+
         Returns:
             The user's input prompt
         """
         self.console.print("\n[bold cyan]Interactive Mode[/bold cyan]")
         self.console.print("[dim]Enter your prompt (press Enter twice to finish):[/dim]\n")
-        
+
         lines = []
         while True:
             try:
@@ -159,20 +159,20 @@ class UI:
             except KeyboardInterrupt:
                 self.console.print("\n[yellow]Cancelled[/yellow]")
                 raise
-        
+
         return "\n".join(lines).strip()
-    
+
     def show_cache_cleared(self, count: int) -> None:
         """Display cache clearing message.
-        
+
         Args:
             count: Number of cache files cleared
         """
         self.console.print(f"\n[green]✓[/green] Cleared [bold cyan]{count}[/bold cyan] cache file(s)")
-    
+
     def show_initialization_error(self, error: str) -> None:
         """Display initialization error in a styled panel.
-        
+
         Args:
             error: The error message to display
         """
@@ -183,10 +183,10 @@ class UI:
             box=box.ROUNDED
         )
         self.console.print(error_panel)
-    
+
     def show_refinement_error(self, error: str, provider: Optional[str] = None) -> None:
         """Display refinement error in a styled panel.
-        
+
         Args:
             error: The error message to display
             provider: Optional provider name to include
@@ -194,7 +194,7 @@ class UI:
         error_msg = f"[bold red]Error:[/bold red] {error}"
         if provider:
             error_msg += f"\n[bold]Provider:[/bold] {provider}"
-        
+
         error_panel = Panel(
             error_msg,
             title="[red]Refinement Error[/red]",
@@ -202,10 +202,10 @@ class UI:
             box=box.ROUNDED
         )
         self.console.print(error_panel)
-    
+
     def print(self, *args, **kwargs) -> None:
         """Direct access to console.print for simple output.
-        
+
         Args:
             *args: Arguments to pass to console.print
             **kwargs: Keyword arguments to pass to console.print
