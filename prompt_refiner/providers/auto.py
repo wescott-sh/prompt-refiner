@@ -26,7 +26,7 @@ class AutoProvider(BaseProvider):
         if OllamaProvider.is_available():
             return OllamaProvider(self.config)
         
-        raise ProviderError("No available providers found. Please ensure Claude API key is set or Ollama is running.")
+        raise ProviderError("No available providers")
     
     def refine_prompt(
         self,

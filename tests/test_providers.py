@@ -50,9 +50,8 @@ class TestAutoProviderSelection:
         mock_ollama_available.return_value = False
         config = Config()
         
-        provider = AutoProvider(config)
         with pytest.raises(ProviderError, match="No available providers"):
-            provider._select_provider()
+            provider = AutoProvider(config)
 
 
 class TestClaudeProviderResponse:
