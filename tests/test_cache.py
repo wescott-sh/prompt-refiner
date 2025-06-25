@@ -144,13 +144,13 @@ class TestCachePersistence:
         cache_config = CacheConfig(location=str(tmp_path), ttl_hours=24)
         cache = Cache(cache_config)
         
-        # Mock file write to raise permission error
-        with patch('pathlib.Path.write_text', side_effect=PermissionError("No write access")):
+        # Mock file operations to raise permission error
+        with patch('builtins.open', side_effect=PermissionError("No write access")):
             # Should not raise, just fail silently
             cache.set("test_key", {"data": "test"})
         
-        # Cache should still be functional for reads (though empty)
-        assert cache.get("test_key") is None
+        # Cache keeps data in memory even if disk write fails
+        assert cache.get("test_key") == {"data": "test"}
 
 
 class TestCacheKeyGeneration:

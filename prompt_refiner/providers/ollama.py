@@ -1,74 +1,81 @@
 """Ollama provider implementation"""
 
 import json
-import time
-import urllib.error
-import urllib.request
-from typing import Dict
+from typing import Any, Dict, List, Optional
 
-from .base import BaseProvider, ProviderRegistry
+from .base import BaseProvider, ProviderError
 
 
 class OllamaProvider(BaseProvider):
-    """Provider for Ollama LLM"""
+    """Provider for Ollama local models"""
 
-    @property
-    def name(self) -> str:
-        """Return the name of this provider"""
-        return 'ollama'
+    def refine_prompt(
+        self,
+        prompt: str,
+        focus_areas: Optional[List[str]] = None,
+        template: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Use Ollama to refine the prompt"""
+        try:
+            import httpx
+        except ImportError:
+            raise ProviderError("httpx package not installed. Run: pip install httpx")
+        
+        api_url = self.config.provider.ollama.get('api_url', 'http://localhost:11434')
+        model = self.config.provider.ollama.get('model', 'llama3.2')
+        temperature = self.config.provider.ollama.get('temperature', 0.7)
+        retry_attempts = self.config.advanced.retry_attempts
+        timeout = self.config.advanced.timeout_seconds
+        
+        refinement_prompt = f"""You are an expert at improving prompts for clarity and effectiveness.
 
-    def is_available(self) -> bool:
+Please refine the following prompt to make it clearer and more effective.
+
+Original prompt: {prompt}
+
+Focus areas: {', '.join(focus_areas) if focus_areas else 'clarity, specificity, actionability'}
+
+Provide your response in JSON format with these fields:
+- improved_prompt: The refined version of the prompt
+- changes_made: Brief explanation of what was changed
+- effectiveness_score: Rate the improvement (e.g., "8/10 - Much clearer")
+
+Respond only with valid JSON."""
+
+        for attempt in range(retry_attempts + 1):
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    response = client.post(
+                        f"{api_url}/api/generate",
+                        json={
+                            "model": model,
+                            "prompt": refinement_prompt,
+                            "temperature": temperature,
+                            "stream": False,
+                            "format": "json"
+                        }
+                    )
+                    response.raise_for_status()
+                    
+                    result = response.json()
+                    
+                    # Parse the response
+                    if 'response' in result:
+                        return json.loads(result['response'])
+                    
+                    return result
+                    
+            except Exception as e:
+                if attempt < retry_attempts:
+                    continue
+                raise ProviderError(f"Failed to connect to Ollama: {str(e)}")
+
+    @staticmethod
+    def is_available() -> bool:
         """Check if Ollama is running"""
         try:
-            url = self.config.get('api_url', 'http://localhost:11434')
-            req = urllib.request.Request(f"{url}/api/tags")
-            with urllib.request.urlopen(req, timeout=2) as response:
-                return response.status == 200
-        except Exception:
+            import httpx
+            response = httpx.get("http://localhost:11434/api/tags", timeout=2)
+            return response.status_code == 200
+        except:
             return False
-
-    def refine(self, prompt: str, retry_attempts: int, timeout_seconds: int) -> Dict[str, str]:
-        """Use Ollama to refine the prompt"""
-        api_url = self.config.get('api_url', 'http://localhost:11434')
-        model = self.config.get('model', 'llama2')
-        temperature = self.config.get('temperature', 0.7)
-
-        url = f"{api_url}/api/generate"
-
-        for attempt in range(retry_attempts):
-            try:
-                data = json.dumps({
-                    'model': model,
-                    'prompt': prompt + "\n\nRespond with valid JSON only.",
-                    'temperature': temperature,
-                    'stream': False,
-                    'format': 'json'
-                }).encode('utf-8')
-
-                req = urllib.request.Request(
-                    url,
-                    data=data,
-                    headers={'Content-Type': 'application/json'}
-                )
-
-                with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
-                    if response.status != 200:
-                        raise RuntimeError(f"Ollama error: {response.status}") from None
-
-                    result = json.loads(response.read().decode('utf-8'))
-                    return json.loads(result['response'])
-
-            except urllib.error.URLError as e:
-                if attempt < retry_attempts - 1:
-                    time.sleep(1)
-                    continue
-                raise RuntimeError("Ollama request failed: " + str(e)) from e
-            except Exception as e:
-                if attempt < retry_attempts - 1:
-                    time.sleep(1)
-                    continue
-                raise e
-
-
-# Register the provider
-ProviderRegistry.register('ollama', OllamaProvider)

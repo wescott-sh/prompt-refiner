@@ -1,64 +1,73 @@
 """Claude provider implementation"""
 
 import json
-import shutil
-import subprocess
-import time
-from typing import Dict
+import os
+from typing import Any, Dict, List, Optional
 
-from .base import BaseProvider, ProviderRegistry
+from .base import BaseProvider, ProviderError
 
 
 class ClaudeProvider(BaseProvider):
-    """Provider for Claude CLI"""
+    """Provider for Claude API"""
 
-    def refine(self, prompt: str, retry_attempts: int, timeout_seconds: int) -> Dict[str, str]:
+    def refine_prompt(
+        self,
+        prompt: str,
+        focus_areas: Optional[List[str]] = None,
+        template: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Use Claude to refine the prompt"""
-        for attempt in range(retry_attempts):
+        try:
+            import anthropic
+        except ImportError:
+            raise ProviderError("anthropic package not installed. Run: pip install anthropic")
+        
+        retry_attempts = self.config.advanced.retry_attempts
+        
+        for attempt in range(retry_attempts + 1):
             try:
-                result = subprocess.run(
-                    ["claude", "--output-format", "json", "-p", prompt],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=timeout_seconds
+                client = anthropic.Anthropic()
+                
+                # Build the refinement prompt
+                system_prompt = "You are an expert at improving prompts for clarity and effectiveness."
+                
+                refinement_prompt = f"""Please refine the following prompt to make it clearer and more effective.
+
+Original prompt: {prompt}
+
+Focus areas: {', '.join(focus_areas) if focus_areas else 'clarity, specificity, actionability'}
+
+Provide your response in JSON format with these fields:
+- improved_prompt: The refined version of the prompt
+- changes_made: Brief explanation of what was changed
+- effectiveness_score: Rate the improvement (e.g., "8/10 - Much clearer")
+
+Respond only with valid JSON."""
+                
+                response = client.messages.create(
+                    model=f"claude-3-{self.config.provider.claude.get('model', 'opus')}-20240229",
+                    max_tokens=1000,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": refinement_prompt}]
                 )
-
-                # Parse the JSON response
-                response_data = json.loads(result.stdout)
-
-                # Extract the actual result from the response structure
-                if isinstance(response_data, dict) and "result" in response_data:
-                    result_text = response_data["result"]
-                    # Remove markdown code block if present
-                    if result_text.startswith("```json"):
-                        result_text = result_text[7:]
-                    if result_text.endswith("```"):
-                        result_text = result_text[:-3]
-                    return json.loads(result_text.strip())
-
-                return response_data
-
-            except subprocess.TimeoutExpired:
-                if attempt < retry_attempts - 1:
-                    time.sleep(1)
-                    continue
-                raise RuntimeError("Claude request timed out") from None
+                
+                # Parse response
+                result_text = response.model_dump_json()
+                result_data = json.loads(result_text)
+                
+                # Extract the actual content
+                if 'content' in result_data and len(result_data['content']) > 0:
+                    content_text = result_data['content'][0].get('text', '{}')
+                    return json.loads(content_text)
+                
+                return result_data
+                
             except Exception as e:
-                if attempt < retry_attempts - 1:
-                    time.sleep(1)
+                if attempt < retry_attempts:
                     continue
-                raise e
+                raise ProviderError(f"Claude API error: {str(e)}")
 
-    def is_available(self) -> bool:
-        """Check if Claude CLI is available"""
-        return shutil.which('claude') is not None
-
-    @property
-    def name(self) -> str:
-        """Return the name of this provider"""
-        return 'claude'
-
-
-# Register the provider
-ProviderRegistry.register('claude', ClaudeProvider)
+    @staticmethod
+    def is_available() -> bool:
+        """Check if Claude API is available"""
+        return os.getenv('ANTHROPIC_API_KEY') is not None

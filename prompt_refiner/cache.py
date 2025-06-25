@@ -108,7 +108,7 @@ class Cache:
         entry = self._cache[key]
         
         # Check TTL
-        if self.ttl_hours > 0:
+        if self.ttl_hours >= 0:  # Include 0 for instant expiry
             age_hours = (time.time() - entry['timestamp']) / 3600
             if age_hours >= self.ttl_hours:
                 # Expired
