@@ -1,0 +1,55 @@
+# prompt-refiner configuration
+
+# LLM provider settings
+provider:
+  # Options: claude, ollama, auto (auto will try claude first, then ollama)
+  type: auto
+  
+  # Claude-specific settings
+  claude:
+    model: opus  # or sonnet, haiku
+    max_turns: 5
+    
+  # Ollama-specific settings  
+  ollama:
+    model: llama3.2  # or any ollama model
+    api_url: http://localhost:11434
+    temperature: 0.7
+
+# Refinement settings
+refinement:
+  # Focus areas for improvement
+  focus_areas:
+    - clarity
+    - specificity
+    - actionability
+    - context
+    
+  # Output format preferences
+  output:
+    include_score: true
+    include_explanation: true
+    verbose: false
+    
+  # Templates for different domains
+  templates:
+    default:
+      emphasis: "clarity and actionability"
+    coding:
+      emphasis: "technical specificity, language/framework details, and expected output"
+    analysis:
+      emphasis: "data sources, metrics, and visualization requirements"
+    writing:
+      emphasis: "tone, audience, format, and key messages"
+
+# Advanced settings
+advanced:
+  # Retry failed requests
+  retry_attempts: 2
+  timeout_seconds: 30
+  
+  # Cache refined prompts
+  cache:
+    enabled: true
+    ttl_hours: 24
+    location: ~/.cache/prompt-refiner
