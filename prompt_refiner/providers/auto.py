@@ -10,24 +10,24 @@ from .ollama import OllamaProvider
 
 class AutoProvider(BaseProvider):
     """Automatically selects the best available provider."""
-    
+
     def __init__(self, config: Config):
         """Initialize auto provider with configuration."""
         super().__init__(config)
         self._provider = self._select_provider()
-    
+
     def _select_provider(self) -> BaseProvider:
         """Select the best available provider."""
         # Check Claude first (preferred)
         if ClaudeProvider.is_available():
             return ClaudeProvider(self.config)
-        
+
         # Fall back to Ollama
         if OllamaProvider.is_available():
             return OllamaProvider(self.config)
-        
+
         raise ProviderError("No available providers")
-    
+
     def refine_prompt(
         self,
         prompt: str,
@@ -36,7 +36,7 @@ class AutoProvider(BaseProvider):
     ) -> Dict[str, Any]:
         """Refine the prompt using the selected provider."""
         return self._provider.refine_prompt(prompt, focus_areas, template)
-    
+
     @staticmethod
     def is_available() -> bool:
         """Check if any provider is available."""

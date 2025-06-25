@@ -24,12 +24,12 @@ def refine_prompt(
     """Refine a prompt programmatically (for testing)."""
     refiner = PromptRefiner(no_cache=not config.advanced.cache.enabled)
     refiner.config = config
-    
+
     # Get the provider
     from prompt_refiner.providers.auto import AutoProvider
     from prompt_refiner.providers.claude import ClaudeProvider
     from prompt_refiner.providers.ollama import OllamaProvider
-    
+
     if config.provider.type == "auto":
         provider = AutoProvider(config)
     elif config.provider.type == "claude":
@@ -38,7 +38,7 @@ def refine_prompt(
         provider = OllamaProvider(config)
     else:
         raise ValueError(f"Unknown provider type: {config.provider.type}")
-    
+
     # Refine the prompt
     return provider.refine_prompt(prompt, focus_areas, template)
 
@@ -77,7 +77,7 @@ def main(
     valid_templates = ['default', 'coding', 'analysis', 'writing']
     if template not in valid_templates:
         ui.print(f"[red]Error: Invalid template '{template}'. Choose from: {', '.join(valid_templates)}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     try:
         # Initialize refinement engine
@@ -97,7 +97,7 @@ def main(
         if prompt is None:
             prompt = ui.get_prompt()
             if not prompt:
-                raise typer.Exit(code=0)
+                raise typer.Exit(code=0) from None
 
         # Show status
         ui.show_status("🔄 Refining your prompt...")
@@ -110,13 +110,13 @@ def main(
 
     except KeyboardInterrupt:
         ui.print("\n[yellow]Refinement cancelled.[/yellow]")
-        raise typer.Exit(code=0)
+        raise typer.Exit(code=0) from None
     except Exception as e:
         ui.print(f"[red]Error: {str(e)}[/red]")
         if verbose:
             import traceback
             traceback.print_exc()
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 if __name__ == "__main__":

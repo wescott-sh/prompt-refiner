@@ -19,10 +19,10 @@ class TestAutoProviderSelection:
         """Test that Claude is selected when available."""
         mock_claude_available.return_value = True
         config = Config()
-        
+
         provider = AutoProvider(config)
         selected = provider._select_provider()
-        
+
         assert isinstance(selected, ClaudeProvider)
 
     @patch('prompt_refiner.providers.claude.ClaudeProvider.is_available')
@@ -34,10 +34,10 @@ class TestAutoProviderSelection:
         mock_claude_available.return_value = False
         mock_ollama_available.return_value = True
         config = Config()
-        
+
         provider = AutoProvider(config)
         selected = provider._select_provider()
-        
+
         assert isinstance(selected, OllamaProvider)
 
     @patch('prompt_refiner.providers.claude.ClaudeProvider.is_available')
@@ -49,9 +49,9 @@ class TestAutoProviderSelection:
         mock_claude_available.return_value = False
         mock_ollama_available.return_value = False
         config = Config()
-        
+
         with pytest.raises(ProviderError, match="No available providers"):
-            provider = AutoProvider(config)
+            AutoProvider(config)
 
 
 class TestClaudeProviderResponse:
@@ -66,15 +66,15 @@ class TestClaudeProviderResponse:
         mock_response.model_dump_json.return_value = '{"improved_prompt": "Write a Python function that calculates factorial", "changes_made": "Added specificity", "effectiveness_score": "8/10"}'
         mock_client.messages.create.return_value = mock_response
         mock_anthropic.return_value = mock_client
-        
+
         config = Config()
         provider = ClaudeProvider(config)
-        
+
         result = provider.refine_prompt(
             "Write a function to calculate factorial",
             focus_areas=['clarity']
         )
-        
+
         assert "improved_prompt" in result
         assert result["improved_prompt"] == "Write a Python function that calculates factorial"
         assert "changes_made" in result
@@ -86,10 +86,10 @@ class TestClaudeProviderResponse:
         mock_client = Mock()
         mock_client.messages.create.side_effect = Exception("API Error")
         mock_anthropic.return_value = mock_client
-        
+
         config = Config()
         provider = ClaudeProvider(config)
-        
+
         with pytest.raises(ProviderError, match="Claude API error"):
             provider.refine_prompt("test prompt")
 
@@ -119,15 +119,15 @@ class TestOllamaProviderFallback:
         mock_response.raise_for_status = Mock()
         mock_client.post.return_value = mock_response
         mock_httpx_client.return_value.__enter__.return_value = mock_client
-        
+
         config = Config()
         provider = OllamaProvider(config)
-        
+
         result = provider.refine_prompt(
             "Write a function to calculate factorial",
             focus_areas=['clarity']
         )
-        
+
         assert "improved_prompt" in result
         assert "changes_made" in result
         assert "effectiveness_score" in result
@@ -138,14 +138,14 @@ class TestOllamaProviderFallback:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_get.return_value = mock_response
-        
+
         assert OllamaProvider.is_available() is True
 
     @patch('httpx.get')
     def test_is_available_when_server_not_running(self, mock_get):
         """Test availability when Ollama server is not running."""
         mock_get.side_effect = Exception("Connection refused")
-        
+
         assert OllamaProvider.is_available() is False
 
 
@@ -164,12 +164,12 @@ class TestProviderErrorHandling:
             mock_response
         ]
         mock_anthropic.return_value = mock_client
-        
+
         config = Config.from_dict({'advanced': {'retry_attempts': 2}})
         provider = ClaudeProvider(config)
-        
+
         result = provider.refine_prompt("test prompt")
-        
+
         assert "improved_prompt" in result
         assert mock_client.messages.create.call_count == 2
 
@@ -179,10 +179,10 @@ class TestProviderErrorHandling:
         mock_client = Mock()
         mock_client.post.side_effect = Exception("Request timeout")
         mock_httpx_client.return_value.__enter__.return_value = mock_client
-        
+
         config = Config.from_dict({'advanced': {'timeout_seconds': 5}})
         provider = OllamaProvider(config)
-        
+
         with pytest.raises(ProviderError, match="Failed to connect"):
             provider.refine_prompt("test prompt")
 
@@ -192,12 +192,12 @@ class TestProviderErrorHandling:
         mock_client = Mock()
         mock_client.messages.create.side_effect = Exception("Persistent error")
         mock_anthropic.return_value = mock_client
-        
+
         config = Config.from_dict({'advanced': {'retry_attempts': 2}})
         provider = ClaudeProvider(config)
-        
+
         with pytest.raises(ProviderError, match="Claude API error"):
             provider.refine_prompt("test prompt")
-        
+
         # Should have tried initial + 2 retries = 3 total
         assert mock_client.messages.create.call_count == 3

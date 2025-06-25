@@ -24,7 +24,7 @@ class Cache:
         self.ttl_hours = cache_config.ttl_hours
         self.cache_dir = Path(cache_config.location).expanduser()
         self._cache = {}
-        
+
         # Load cache from disk if enabled
         if self.enabled and self.cache_dir.exists():
             self._load_cache()
@@ -38,9 +38,9 @@ class Cache:
         cache_file = self._get_cache_file()
         if cache_file.exists():
             try:
-                with open(cache_file, 'r') as f:
+                with open(cache_file) as f:
                     self._cache = json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 # If cache is corrupted, start fresh
                 self._cache = {}
 
@@ -48,13 +48,13 @@ class Cache:
         """Save cache to disk."""
         if not self.enabled:
             return
-            
+
         try:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             cache_file = self._get_cache_file()
             with open(cache_file, 'w') as f:
                 json.dump(self._cache, f)
-        except (IOError, PermissionError):
+        except (OSError, PermissionError):
             # Fail silently on write errors
             pass
 
@@ -70,7 +70,7 @@ class Cache:
         """Set a value in cache."""
         if not self.enabled:
             return
-            
+
         self._cache[key] = {
             'data': data,
             'timestamp': time.time()
@@ -101,12 +101,12 @@ class Cache:
         """Internal method to get by key."""
         if not self.enabled:
             return None
-            
+
         if key not in self._cache:
             return None
-            
+
         entry = self._cache[key]
-        
+
         # Check TTL
         if self.ttl_hours >= 0:  # Include 0 for instant expiry
             age_hours = (time.time() - entry['timestamp']) / 3600
@@ -115,14 +115,14 @@ class Cache:
                 del self._cache[key]
                 self._save_cache()
                 return None
-        
+
         return entry['data']
 
     def save(self, prompt: str, template: str, provider: str, result: Dict[str, str]):
         """Store a result in cache using legacy parameters."""
         if not self.enabled:
             return
-            
+
         cache_key = self.get_cache_key(prompt, template, provider)
         self.set(cache_key, result)
 

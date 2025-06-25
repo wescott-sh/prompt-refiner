@@ -1,7 +1,7 @@
 """Base provider abstraction and registry"""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Type, List
+from typing import Any, Dict, List, Optional, Type
 
 
 class ProviderError(Exception):

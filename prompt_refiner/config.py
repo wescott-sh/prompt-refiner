@@ -59,12 +59,12 @@ class Config:
         # Handle None or empty data
         if not data:
             return cls()
-        
+
         provider_data = data.get('provider', {})
         refinement_data = data.get('refinement', {})
         advanced_data = data.get('advanced', {})
         cache_data = advanced_data.get('cache', {})
-        
+
         # Handle None values for claude/ollama and merge with defaults
         claude_defaults = {'model': 'opus'}
         claude_data = provider_data.get('claude')
@@ -73,7 +73,7 @@ class Config:
         else:
             # Merge with defaults
             claude_data = {**claude_defaults, **claude_data}
-            
+
         ollama_defaults = {
             'model': 'llama3.2',
             'api_url': 'http://localhost:11434',

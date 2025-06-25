@@ -1,10 +1,7 @@
 """Tests for configuration module."""
 
-import os
 from dataclasses import FrozenInstanceError
-from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Dict
 
 import pytest
 import yaml
@@ -25,21 +22,21 @@ class TestDefaultConfigCreation:
     def test_empty_dict_creates_all_defaults(self):
         """Test that an empty dict creates a config with all default values."""
         config = Config.from_dict({})
-        
+
         # Test provider defaults
         assert config.provider.type == 'auto'
         assert config.provider.claude['model'] == 'opus'
         assert config.provider.ollama['model'] == 'llama3.2'
         assert config.provider.ollama['api_url'] == 'http://localhost:11434'
         assert config.provider.ollama['temperature'] == 0.7
-        
+
         # Test refinement defaults
         assert config.refinement.focus_areas == ('clarity', 'specificity', 'actionability')
         assert config.refinement.output['include_score'] is True
         assert config.refinement.output['include_explanation'] is True
         assert config.refinement.output['verbose'] is False
         assert config.refinement.templates['default']['emphasis'] == 'clarity and actionability'
-        
+
         # Test advanced defaults
         assert config.advanced.retry_attempts == 2
         assert config.advanced.timeout_seconds == 30
@@ -58,11 +55,11 @@ class TestDefaultConfigCreation:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         # Changed values
         assert config.provider.type == 'claude'
         assert config.refinement.focus_areas == ('technical', 'precision')
-        
+
         # Unchanged defaults
         assert config.provider.claude['model'] == 'opus'
         assert config.advanced.retry_attempts == 2
@@ -79,7 +76,7 @@ class TestDefaultConfigCreation:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         assert config.advanced.cache.enabled is False
         assert config.advanced.cache.ttl_hours == 48
         assert config.advanced.cache.location == '~/.cache/prompt-refiner'  # default
@@ -89,7 +86,7 @@ class TestDefaultConfigCreation:
         cache_config = CacheConfig(enabled=False, ttl_hours=12)
         advanced_config = AdvancedConfig(cache=cache_config)
         config = Config(advanced=advanced_config)
-        
+
         assert config.advanced.cache.enabled is False
         assert config.advanced.cache.ttl_hours == 12
         # Other fields should use defaults
@@ -133,20 +130,20 @@ class TestConfigOverridePrecedence:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         # All values should be overridden
         assert config.provider.type == 'ollama'
         assert config.provider.claude['model'] == 'sonnet'
         assert config.provider.ollama['model'] == 'mistral'
         assert config.provider.ollama['api_url'] == 'http://localhost:8080'
         assert config.provider.ollama['temperature'] == 0.9
-        
+
         assert config.refinement.focus_areas == ('brevity', 'clarity')
         assert config.refinement.output['include_score'] is False
         assert config.refinement.output['include_explanation'] is False
         assert config.refinement.output['verbose'] is True
         assert config.refinement.templates['custom']['emphasis'] == 'conciseness'
-        
+
         assert config.advanced.retry_attempts == 5
         assert config.advanced.timeout_seconds == 60
         assert config.advanced.cache.enabled is False
@@ -164,11 +161,11 @@ class TestConfigOverridePrecedence:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         # Overridden values
         assert config.provider.claude['model'] == 'haiku'
         assert config.refinement.output['verbose'] is True
-        
+
         # Default values should remain
         assert config.refinement.output['include_score'] is True
         assert config.refinement.output['include_explanation'] is True
@@ -181,7 +178,7 @@ class TestConfigOverridePrecedence:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         assert config.refinement.focus_areas == ()
 
 
@@ -191,42 +188,42 @@ class TestConfigImmutability:
     def test_cannot_modify_top_level_fields(self):
         """Test that top-level Config fields cannot be modified."""
         config = Config()
-        
+
         with pytest.raises(FrozenInstanceError):
             config.provider = ProviderConfig(type='ollama')
 
     def test_cannot_modify_nested_dataclass_fields(self):
         """Test that nested dataclass fields cannot be modified."""
         config = Config()
-        
+
         with pytest.raises(FrozenInstanceError):
             config.provider.type = 'ollama'
-        
+
         with pytest.raises(FrozenInstanceError):
             config.advanced.cache.enabled = False
 
     def test_mapping_proxy_prevents_dict_mutations(self):
         """Test that MappingProxyType prevents dictionary mutations."""
         config = Config()
-        
+
         # These should raise TypeError since MappingProxyType is immutable
         with pytest.raises(TypeError):
             config.provider.claude['model'] = 'sonnet'
-        
+
         with pytest.raises(TypeError):
             config.refinement.output['verbose'] = True
-        
+
         with pytest.raises(TypeError):
             del config.refinement.templates['default']
 
     def test_tuple_immutability(self):
         """Test that tuple fields are immutable."""
         config = Config()
-        
+
         # Can't assign to tuple
         with pytest.raises(FrozenInstanceError):
             config.refinement.focus_areas = ('new', 'areas')
-        
+
         # Can't modify tuple in place (tuples are inherently immutable)
         with pytest.raises(AttributeError):
             config.refinement.focus_areas.append('new_area')
@@ -238,7 +235,7 @@ class TestLoadConfig:
     def test_load_from_file_path(self, temp_config_file):
         """Test loading configuration from a specific file path."""
         config_dict = load_config(str(temp_config_file))
-        
+
         assert config_dict['provider']['type'] == 'auto'
         assert config_dict['provider']['ollama']['model'] == 'llama2'
         assert config_dict['refinement']['focus_areas'] == ['clarity', 'actionability']
@@ -247,9 +244,9 @@ class TestLoadConfig:
     def test_load_from_environment_variable(self, temp_config_file, monkeypatch):
         """Test loading configuration from PROMPT_REFINER_CONFIG env var."""
         monkeypatch.setenv('PROMPT_REFINER_CONFIG', str(temp_config_file))
-        
+
         config_dict = load_config()
-        
+
         assert config_dict['provider']['type'] == 'auto'
         assert config_dict['advanced']['cache']['enabled'] is True
 
@@ -261,12 +258,12 @@ class TestLoadConfig:
 provider:
   type: claude
 """)
-        
+
         monkeypatch.setenv('PROMPT_REFINER_CONFIG', str(temp_config_file))
-        
+
         # Pass different path, but env var should win
         config_dict = load_config(str(other_config))
-        
+
         assert config_dict['provider']['type'] == 'auto'  # from temp_config_file
 
     def test_returns_empty_dict_when_no_config_found(self, tmp_path, monkeypatch):
@@ -274,10 +271,10 @@ provider:
         # Set a non-existent path
         nonexistent_path = str(tmp_path / 'nonexistent.yaml')
         monkeypatch.setenv('PROMPT_REFINER_CONFIG', nonexistent_path)
-        
+
         # Explicitly pass the nonexistent path to bypass fallback locations
         config_dict = load_config(nonexistent_path)
-        
+
         assert config_dict == {}
 
     def test_invalid_yaml_raises_error(self, tmp_path):
@@ -287,7 +284,7 @@ provider:
 invalid: yaml: content
   bad indentation
 """)
-        
+
         with pytest.raises(yaml.YAMLError):
             load_config(str(invalid_config))
 
@@ -304,7 +301,7 @@ class TestEdgeCases:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         # None should be treated as missing, using defaults
         assert config.provider.type == 'auto'
         assert config.provider.claude['model'] == 'opus'
@@ -319,7 +316,7 @@ class TestEdgeCases:
             'unknown_section': {'key': 'value'},  # Extra section
         }
         config = Config.from_dict(config_data)
-        
+
         # Should create config without errors
         assert config.provider.type == 'auto'
         assert not hasattr(config.provider, 'unknown_provider')
@@ -340,7 +337,7 @@ class TestEdgeCases:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         assert config.provider.ollama['api_url'] == 'http://localhost:8080/v1/api?key=test&value=123'
         assert config.advanced.cache.location == '~/cache/prompt-refiner/with spaces/and-special_chars'
 
@@ -356,7 +353,7 @@ class TestEdgeCases:
             }
         }
         config = Config.from_dict(config_data)
-        
+
         assert config.advanced.retry_attempts == 0
         assert config.advanced.timeout_seconds == 999999
         assert config.advanced.cache.ttl_hours == 0
@@ -365,14 +362,14 @@ class TestEdgeCases:
         """Test handling of large configuration dictionaries."""
         # Create a large templates section
         large_templates = {f'template_{i}': {'emphasis': f'focus_{i}'} for i in range(100)}
-        
+
         config_data = {
             'refinement': {
                 'templates': large_templates
             }
         }
         config = Config.from_dict(config_data)
-        
+
         assert len(config.refinement.templates) == 101  # 100 + default template
         assert config.refinement.templates['template_50']['emphasis'] == 'focus_50'
         assert config.refinement.templates['default']['emphasis'] == 'clarity and actionability'
@@ -417,17 +414,17 @@ class TestIntegration:
         """Test complete workflow from file to Config object."""
         # Load from file
         config_dict = load_config(str(temp_config_file))
-        
+
         # Create Config object
         config = Config.from_dict(config_dict)
-        
+
         # Verify values from file
         assert config.provider.type == 'auto'
         assert config.provider.ollama['model'] == 'llama2'
         assert config.refinement.focus_areas == ('clarity', 'actionability')
         assert config.refinement.templates['coding']['emphasis'] == 'technical precision'
         assert config.advanced.retry_attempts == 3
-        
+
         # Verify immutability
         with pytest.raises(FrozenInstanceError):
             config.provider.type = 'claude'
@@ -436,10 +433,10 @@ class TestIntegration:
         """Test that empty config file results in all defaults."""
         empty_config = tmp_path / "empty.yaml"
         empty_config.write_text("")
-        
+
         config_dict = load_config(str(empty_config))
         config = Config.from_dict(config_dict)
-        
+
         # Should have all defaults
         assert config.provider.type == 'auto'
         assert config.refinement.focus_areas == ('clarity', 'specificity', 'actionability')

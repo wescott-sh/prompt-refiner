@@ -18,15 +18,15 @@ class OllamaProvider(BaseProvider):
         """Use Ollama to refine the prompt"""
         try:
             import httpx
-        except ImportError:
-            raise ProviderError("httpx package not installed. Run: pip install httpx")
-        
+        except ImportError as e:
+            raise ProviderError("httpx package not installed. Run: pip install httpx") from e
+
         api_url = self.config.provider.ollama.get('api_url', 'http://localhost:11434')
         model = self.config.provider.ollama.get('model', 'llama3.2')
         temperature = self.config.provider.ollama.get('temperature', 0.7)
         retry_attempts = self.config.advanced.retry_attempts
         timeout = self.config.advanced.timeout_seconds
-        
+
         refinement_prompt = f"""You are an expert at improving prompts for clarity and effectiveness.
 
 Please refine the following prompt to make it clearer and more effective.
@@ -56,19 +56,19 @@ Respond only with valid JSON."""
                         }
                     )
                     response.raise_for_status()
-                    
+
                     result = response.json()
-                    
+
                     # Parse the response
                     if 'response' in result:
                         return json.loads(result['response'])
-                    
+
                     return result
-                    
+
             except Exception as e:
                 if attempt < retry_attempts:
                     continue
-                raise ProviderError(f"Failed to connect to Ollama: {str(e)}")
+                raise ProviderError(f"Failed to connect to Ollama: {str(e)}") from e
 
     @staticmethod
     def is_available() -> bool:
@@ -77,5 +77,5 @@ Respond only with valid JSON."""
             import httpx
             response = httpx.get("http://localhost:11434/api/tags", timeout=2)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
