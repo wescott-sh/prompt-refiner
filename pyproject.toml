@@ -1,0 +1,20 @@
+[project]
+name = "prompt-refiner"
+version = "0.1.0"
+description = "A tool to automatically improve prompts using Claude or Ollama"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "Wescott", email = "hi@wescott.sh"}]
+dependencies = [
+    "pyyaml>=6.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+prompt-refiner = "prompt_refiner.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
