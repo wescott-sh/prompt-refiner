@@ -56,14 +56,7 @@ class PromptRefiner:
         self.provider = self._detect_provider()
 
         # Initialize cache
-        cache_dir = Path(os.path.expanduser(
-            self.config.advanced.cache.location
-        ))
-        self.cache = Cache(
-            cache_dir=cache_dir,
-            enabled=self.config.advanced.cache.enabled,
-            ttl_hours=self.config.advanced.cache.ttl_hours
-        )
+        self.cache = Cache(self.config.advanced.cache)
 
     def clear_cache(self) -> int:
         """Clear all cache files and return count of files removed"""

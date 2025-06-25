@@ -19,7 +19,7 @@ class CacheConfig:
 @dataclass(frozen=True)
 class ProviderConfig:
     type: str = 'auto'
-    claude: Dict[str, Any] = field(default_factory=lambda: MappingProxyType({'model': 'opus', 'max_turns': 5}))
+    claude: Dict[str, Any] = field(default_factory=lambda: MappingProxyType({'model': 'opus'}))
     ollama: Dict[str, Any] = field(default_factory=lambda: MappingProxyType({
         'model': 'llama3.2',
         'api_url': 'http://localhost:11434',
@@ -54,33 +54,54 @@ class Config:
     advanced: AdvancedConfig = field(default_factory=AdvancedConfig)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Config':
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> 'Config':
         """Create Config from dictionary"""
+        # Handle None or empty data
+        if not data:
+            return cls()
+        
         provider_data = data.get('provider', {})
         refinement_data = data.get('refinement', {})
         advanced_data = data.get('advanced', {})
         cache_data = advanced_data.get('cache', {})
+        
+        # Handle None values for claude/ollama and merge with defaults
+        claude_defaults = {'model': 'opus'}
+        claude_data = provider_data.get('claude')
+        if claude_data is None:
+            claude_data = claude_defaults
+        else:
+            # Merge with defaults
+            claude_data = {**claude_defaults, **claude_data}
+            
+        ollama_defaults = {
+            'model': 'llama3.2',
+            'api_url': 'http://localhost:11434',
+            'temperature': 0.7
+        }
+        ollama_data = provider_data.get('ollama')
+        if ollama_data is None:
+            ollama_data = ollama_defaults
+        else:
+            # Merge with defaults
+            ollama_data = {**ollama_defaults, **ollama_data}
 
         return cls(
             provider=ProviderConfig(
-                type=provider_data.get('type', 'auto'),
-                claude=MappingProxyType(provider_data.get('claude', {'model': 'opus', 'max_turns': 5})),
-                ollama=MappingProxyType(provider_data.get('ollama', {
-                    'model': 'llama3.2',
-                    'api_url': 'http://localhost:11434',
-                    'temperature': 0.7
-                }))
+                type=provider_data.get('type') or 'auto',
+                claude=MappingProxyType(claude_data),
+                ollama=MappingProxyType(ollama_data)
             ),
             refinement=RefinementConfig(
                 focus_areas=tuple(refinement_data.get('focus_areas', ['clarity', 'specificity', 'actionability'])),
-                output=MappingProxyType(refinement_data.get('output', {
-                    'include_score': True,
-                    'include_explanation': True,
-                    'verbose': False
-                })),
-                templates=MappingProxyType(refinement_data.get('templates', {
-                    'default': {'emphasis': 'clarity and actionability'}
-                }))
+                output=MappingProxyType({
+                    **{'include_score': True, 'include_explanation': True, 'verbose': False},
+                    **refinement_data.get('output', {})
+                }),
+                templates=MappingProxyType({
+                    **{'default': {'emphasis': 'clarity and actionability'}},
+                    **refinement_data.get('templates', {})
+                })
             ),
             advanced=AdvancedConfig(
                 retry_attempts=advanced_data.get('retry_attempts', 2),
@@ -122,4 +143,5 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             return {}
 
     with open(config_file) as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+        return data if data is not None else {}

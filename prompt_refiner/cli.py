@@ -1,9 +1,10 @@
 """Command-line interface for prompt-refiner."""
 
-from typing import Annotated, Optional
+from typing import Annotated, Dict, List, Optional
 
 import typer
 
+from prompt_refiner.config import Config
 from prompt_refiner.refinement import PromptRefiner
 from prompt_refiner.ui import UI
 
@@ -12,6 +13,34 @@ app = typer.Typer(
     help="Automatically improve prompts using LLMs",
     rich_markup_mode="rich"
 )
+
+
+def refine_prompt(
+    prompt: str,
+    config: Config,
+    focus_areas: Optional[List[str]] = None,
+    template: str = "default"
+) -> Dict[str, str]:
+    """Refine a prompt programmatically (for testing)."""
+    refiner = PromptRefiner(no_cache=not config.advanced.cache.enabled)
+    refiner.config = config
+    
+    # Get the provider
+    from prompt_refiner.providers.auto import AutoProvider
+    from prompt_refiner.providers.claude import ClaudeProvider
+    from prompt_refiner.providers.ollama import OllamaProvider
+    
+    if config.provider.type == "auto":
+        provider = AutoProvider(config)
+    elif config.provider.type == "claude":
+        provider = ClaudeProvider(config)
+    elif config.provider.type == "ollama":
+        provider = OllamaProvider(config)
+    else:
+        raise ValueError(f"Unknown provider type: {config.provider.type}")
+    
+    # Refine the prompt
+    return provider.refine_prompt(prompt, focus_areas, template)
 
 
 @app.command()
@@ -48,70 +77,46 @@ def main(
     valid_templates = ['default', 'coding', 'analysis', 'writing']
     if template not in valid_templates:
         ui.print(f"[red]Error: Invalid template '{template}'. Choose from: {', '.join(valid_templates)}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(code=1)
 
-    # Validate provider
-    if provider and provider not in ['auto', 'claude', 'ollama']:
-        ui.print("[red]Error: Invalid provider. Choose from: auto, claude, ollama[/red]")
-        raise typer.Exit(1)
-
-    # Initialize refiner
     try:
+        # Initialize refinement engine
         refiner = PromptRefiner(
             config_path=config,
             no_cache=no_cache,
             provider=provider
         )
+
+        # Clear cache if requested
+        if clear_cache:
+            ui.clear_cache(refiner.config)
+            if prompt is None:  # If just clearing cache
+                return
+
+        # Get prompt from argument or interactive input
+        if prompt is None:
+            prompt = ui.get_prompt()
+            if not prompt:
+                raise typer.Exit(code=0)
+
+        # Show status
+        ui.show_status("🔄 Refining your prompt...")
+
+        # Refine the prompt
+        result = refiner.refine(prompt, template=template)
+
+        # Display result
+        ui.display_result(result, template, verbose)
+
+    except KeyboardInterrupt:
+        ui.print("\n[yellow]Refinement cancelled.[/yellow]")
+        raise typer.Exit(code=0)
     except Exception as e:
-        ui.show_initialization_error(str(e))
-        raise typer.Exit(1) from e
-
-    # Handle cache clearing if requested
-    if clear_cache:
-        count = refiner.clear_cache()
-        ui.show_cache_cleared(count)
-        if not prompt:
-            # If no prompt provided and only clearing cache, exit
-            raise typer.Exit(0)
-
-    # Get prompt
-    if prompt:
-        original_prompt = prompt
-    else:
-        # Interactive mode
-        try:
-            original_prompt = ui.prompt_for_input()
-        except KeyboardInterrupt:
-            raise typer.Exit(0) from None
-
-    if not original_prompt:
-        ui.print("[red]Error: No prompt provided[/red]")
-        raise typer.Exit(1)
-
-    # Show provider info if verbose
-    if verbose:
-        ui.show_config(refiner.provider, template, not no_cache)
-
-    ui.print()
-
-    # Refine the prompt with progress indicator
-    with ui.show_progress("Analyzing prompt..."):
-        result = refiner.refine_prompt(original_prompt, template)
-
-    if "error" in result:
-        ui.show_refinement_error(result['error'], result.get('provider'))
-        raise typer.Exit(1)
-
-    # Display results
-    ui.show_results(
-        original=original_prompt,
-        improved=result['improved_prompt'],
-        changes=result['changes_made'],
-        score=result.get('effectiveness_score'),
-        from_cache=result.get('from_cache', False),
-        show_explanation=refiner.config.refinement.output['include_explanation'],
-        show_score=refiner.config.refinement.output['include_score']
-    )
+        ui.print(f"[red]Error: {str(e)}[/red]")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

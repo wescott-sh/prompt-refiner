@@ -1,39 +1,44 @@
 """Base provider abstraction and registry"""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, List
+
+
+class ProviderError(Exception):
+    """Base exception for provider-related errors"""
+    pass
 
 
 class BaseProvider(ABC):
     """Abstract base class for LLM providers"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config):
         self.config = config
 
     @abstractmethod
-    def refine(self, prompt: str, retry_attempts: int, timeout_seconds: int) -> Dict[str, str]:
+    def refine_prompt(
+        self,
+        prompt: str,
+        focus_areas: Optional[List[str]] = None,
+        template: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Refine a prompt using the provider's LLM.
 
         Args:
-            prompt: The refinement prompt to send to the LLM
-            retry_attempts: Number of retry attempts on failure
-            timeout_seconds: Timeout for the request
+            prompt: The prompt to refine
+            focus_areas: Areas to focus on during refinement
+            template: Template to use for refinement
 
         Returns:
             Dict containing the refined prompt and metadata
         """
         pass
 
+    @staticmethod
     @abstractmethod
-    def is_available(self) -> bool:
+    def is_available() -> bool:
         """Check if this provider is available for use"""
-        pass
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Return the name of this provider"""
         pass
 
 
