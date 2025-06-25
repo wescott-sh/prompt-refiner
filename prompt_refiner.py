@@ -3,6 +3,8 @@
 # requires-python = ">=3.8"
 # dependencies = [
 #   "pyyaml>=6.0",
+#   "rich",
+#   "typer",
 # ]
 # ///
 """
@@ -21,10 +23,9 @@ import sys
 import json
 import yaml
 import subprocess
-import argparse
 import os
 from pathlib import Path
-from typing import Dict, Optional, Any, FrozenSet, Tuple
+from typing import Dict, Optional, Any, FrozenSet, Tuple, Annotated
 from dataclasses import dataclass, field
 from types import MappingProxyType
 import hashlib
@@ -33,6 +34,15 @@ from datetime import datetime, timedelta
 import shutil
 import urllib.request
 import urllib.error
+
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.syntax import Syntax
+from rich.prompt import Prompt
+from rich.text import Text
+from rich import box
 
 
 @dataclass(frozen=True)
@@ -422,109 +432,181 @@ Ensure the improved prompt is specific, actionable, and unambiguous."""
             }
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Automatically improve prompts using LLMs"
-    )
-    parser.add_argument('prompt', nargs='*', help='The prompt to refine')
-    parser.add_argument('--config', help='Path to configuration file')
-    parser.add_argument(
-        '--template', 
-        choices=['default', 'coding', 'analysis', 'writing'],
-        default='default',
-        help='Template to use for refinement'
-    )
-    parser.add_argument(
-        '--verbose', 
-        action='store_true',
-        help='Show detailed output'
-    )
-    parser.add_argument(
-        '--no-cache',
-        action='store_true',
-        help='Disable cache for this run'
-    )
-    parser.add_argument(
-        '--provider',
-        choices=['auto', 'claude', 'ollama'],
-        help='Choose provider explicitly'
-    )
-    parser.add_argument(
-        '--clear-cache',
-        action='store_true',
-        help='Clear all cache files before running'
-    )
+# Initialize Typer app and Rich console
+app = typer.Typer(
+    help="Automatically improve prompts using LLMs",
+    rich_markup_mode="rich"
+)
+console = Console()
+
+
+@app.command()
+def main(
+    prompt: Annotated[Optional[str], typer.Argument(help="The prompt to refine")] = None,
+    config: Annotated[Optional[str], typer.Option("--config", help="Path to configuration file")] = None,
+    template: Annotated[str, typer.Option(
+        "--template", 
+        help="Template to use for refinement"
+    )] = "default",
+    verbose: Annotated[bool, typer.Option(
+        "--verbose", "-v",
+        help="Show detailed output"
+    )] = False,
+    no_cache: Annotated[bool, typer.Option(
+        "--no-cache",
+        help="Disable cache for this run"
+    )] = False,
+    provider: Annotated[Optional[str], typer.Option(
+        "--provider",
+        help="Choose provider explicitly (auto, claude, ollama)"
+    )] = None,
+    clear_cache: Annotated[bool, typer.Option(
+        "--clear-cache",
+        help="Clear all cache files before running"
+    )] = False
+):
+    """Refine prompts using Claude or Ollama for better clarity and effectiveness."""
     
-    args = parser.parse_args()
+    # Validate template
+    valid_templates = ['default', 'coding', 'analysis', 'writing']
+    if template not in valid_templates:
+        console.print(f"[red]Error: Invalid template '{template}'. Choose from: {', '.join(valid_templates)}[/red]")
+        raise typer.Exit(1)
+    
+    # Validate provider
+    if provider and provider not in ['auto', 'claude', 'ollama']:
+        console.print("[red]Error: Invalid provider. Choose from: auto, claude, ollama[/red]")
+        raise typer.Exit(1)
     
     # Initialize refiner
     try:
         refiner = PromptRefiner(
-            config_path=args.config,
-            no_cache=args.no_cache,
-            provider=args.provider
+            config_path=config,
+            no_cache=no_cache,
+            provider=provider
         )
     except Exception as e:
-        print(f"❌ Error initializing: {e}")
-        sys.exit(1)
+        error_panel = Panel(
+            f"[bold red]Error initializing:[/bold red]\n{str(e)}",
+            title="[red]Initialization Error[/red]",
+            border_style="red",
+            box=box.ROUNDED
+        )
+        console.print(error_panel)
+        raise typer.Exit(1)
     
     # Handle cache clearing if requested
-    if args.clear_cache:
+    if clear_cache:
         count = refiner.clear_cache()
-        print(f"🗑️  Cleared {count} cache file(s)")
-        if not args.prompt:
+        console.print(f"\n[green]✓[/green] Cleared [bold cyan]{count}[/bold cyan] cache file(s)")
+        if not prompt:
             # If no prompt provided and only clearing cache, exit
-            sys.exit(0)
+            raise typer.Exit(0)
     
     # Get prompt
-    if args.prompt:
-        original_prompt = " ".join(args.prompt)
+    if prompt:
+        original_prompt = prompt
     else:
         # Interactive mode
-        print("Enter your prompt (press Enter twice to finish):")
+        console.print("\n[bold cyan]Interactive Mode[/bold cyan]")
+        console.print("[dim]Enter your prompt (press Enter twice to finish):[/dim]\n")
         lines = []
         while True:
-            line = input()
-            if line == "" and lines and lines[-1] == "":
-                lines.pop()
-                break
-            lines.append(line)
+            try:
+                line = Prompt.ask("", default="", show_default=False)
+                if line == "" and lines and lines[-1] == "":
+                    lines.pop()
+                    break
+                lines.append(line)
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Cancelled[/yellow]")
+                raise typer.Exit(0)
         original_prompt = "\n".join(lines).strip()
     
     if not original_prompt:
-        print("No prompt provided")
-        sys.exit(1)
+        console.print("[red]Error: No prompt provided[/red]")
+        raise typer.Exit(1)
     
     # Show provider info if verbose
-    if args.verbose:
-        print(f"\n🔧 Using provider: {refiner.provider}")
+    if verbose:
+        provider_info = Panel(
+            f"[bold]Provider:[/bold] [cyan]{refiner.provider}[/cyan]\n"
+            f"[bold]Template:[/bold] [cyan]{template}[/cyan]\n"
+            f"[bold]Cache:[/bold] [cyan]{'Disabled' if no_cache else 'Enabled'}[/cyan]",
+            title="[bold]Configuration[/bold]",
+            box=box.ROUNDED
+        )
+        console.print(provider_info)
     
-    print("\n🔍 Analyzing prompt...")
-    result = refiner.refine_prompt(original_prompt, args.template)
+    console.print()
+    
+    # Refine the prompt with progress indicator
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]Analyzing prompt...[/bold cyan]"),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task("Analyzing", total=None)
+        result = refiner.refine_prompt(original_prompt, template)
+        progress.update(task, completed=True)
     
     if "error" in result:
-        print(f"\n❌ Error: {result['error']}")
+        error_msg = f"[bold red]Error:[/bold red] {result['error']}"
         if 'provider' in result:
-            print(f"   Provider: {result['provider']}")
-        sys.exit(1)
+            error_msg += f"\n[bold]Provider:[/bold] {result['provider']}"
+        
+        error_panel = Panel(
+            error_msg,
+            title="[red]Refinement Error[/red]",
+            border_style="red",
+            box=box.ROUNDED
+        )
+        console.print(error_panel)
+        raise typer.Exit(1)
     
-    print("\n📝 Original prompt:")
-    print(f"   {original_prompt}")
+    # Display results
+    console.print()
     
-    print("\n✨ Improved prompt:")
-    print(f"   {result['improved_prompt']}")
+    # Original prompt
+    original_panel = Panel(
+        Text(original_prompt, style="dim"),
+        title="[bold]Original Prompt[/bold]",
+        border_style="blue",
+        box=box.ROUNDED
+    )
+    console.print(original_panel)
+    
+    # Improved prompt
+    improved_panel = Panel(
+        Text(result['improved_prompt'], style="green"),
+        title="[bold green]✨ Improved Prompt[/bold green]",
+        border_style="green",
+        box=box.ROUNDED
+    )
+    console.print(improved_panel)
     
     if refiner.config.refinement.output['include_explanation']:
-        print("\n🔧 Changes made:")
-        print(f"   {result['changes_made']}")
+        changes_panel = Panel(
+            Text(result['changes_made']),
+            title="[bold yellow]Changes Made[/bold yellow]",
+            border_style="yellow",
+            box=box.ROUNDED
+        )
+        console.print(changes_panel)
     
     if refiner.config.refinement.output['include_score'] and "effectiveness_score" in result:
-        print("\n📊 Effectiveness score:")
-        print(f"   {result['effectiveness_score']}")
+        score_panel = Panel(
+            Text(result['effectiveness_score']),
+            title="[bold magenta]Effectiveness Score[/bold magenta]",
+            border_style="magenta",
+            box=box.ROUNDED
+        )
+        console.print(score_panel)
     
     if result.get('from_cache'):
-        print("\n💾 (Retrieved from cache)")
+        console.print("\n[dim cyan]💾 Retrieved from cache[/dim cyan]")
 
 
 if __name__ == "__main__":
-    main()
+    app()
